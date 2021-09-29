@@ -18,30 +18,51 @@ domain = get_command_line_argument
 # https://www.rubydoc.info/stdlib/core/IO:readlines
 dns_raw = File.readlines("zone")
 
+# Step 1: Filter  the comments (lines starting with #), and empty lines from the zone file.
+# Step 2: Build a hash which represents dns_records.
+def parse_dns(dns_raw)
+  dns_records_data = dns_raw.select { |line| line[0] != "#" && line[0] != "\n"}
 
-# A hash that uses symbol as keys...
-symbol_key_hash = { :type => 'A', :target => 'gmail.com' }
+  #Iterate over each line, split it into an array with 3 columns using the .split method,
+  dns_records_data.each_with_index{ |line, index|
+    line_split= line.split(", ")
+    line_split[2] = line_split[2].strip # to remove newline
+    dns_records_data[index] = line_split
+  }
 
-# ...and a hash that uses strings as keys:
-string_key_hash = { 'type' => 'A', 'target' => 'gmail.com' }
-symbol_key_hash == string_key_hash
-# => false
-# A hash that uses symbols as keys, using the "old" Ruby notation...
-traditional_hash = { :type => 'A', :target => 'gmail.com' }
+  dns_hash = {}
+  dns_records_data.each{ |line|
+    dns_hash[line[1]] = {type: line[0], target: line[2]}
+  }
+  dns_hash
+end
 
-# And the same hash, but using the "new" notation for writing hashes that use symbols as keys...
-# Note how this format is shorter and easier to write.
-modern_key_hash = { type: 'A', target: 'gmail.com' }
-traditional_hash == modern_key_hash
-# => true
+# Step 3 : Resolve DNS value usingrecursion
+def resolve(dns_records_hash, lookup_chain_data, domain_data)
 
-
-
+  record = dns_records_hash[domain_data]
+  if (!record)
+    lookup_chain_data << "Error: Record not found for "+ domain_data
+  elsif record[:type] == "CNAME"
+    lookup_chain_data.push(record[:target])
+    resolve(dns_records_hash, lookup_chain_data, record[:target])
+  elsif record[:type] == "A"
+    lookup_chain_data.push(record[:target])
+    return lookup_chain_data
+  else
+    lookup_chain_data << "Invalid record type for "+ domain_data
+    return
+  end
+end
 
 # To complete the assignment, implement `parse_dns` and `resolve`.
 # Remember to implement them above this line since in Ruby
 # you can invoke a function only after it is defined.
-dns_records = parse_dns(dns_raw)
+
+dns_records_hash = parse_dns(dns_raw)
+#puts dns_records_hash
+
 lookup_chain = [domain]
-lookup_chain = resolve(dns_records, lookup_chain, domain)
+lookup_chain = resolve(dns_records_hash, lookup_chain, domain)
+#puts lookup_chain
 puts lookup_chain.join(" => ")
